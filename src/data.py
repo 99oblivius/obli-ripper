@@ -5,10 +5,13 @@ import ast
 import logging
 from src.utils import Singleton
 
+
 def get_appdata_path():
     if os.name == 'nt':
         appdata_path = os.getenv('APPDATA')
+        appdata_path = os.path.dirname(appdata_path)
         appdata_path = os.path.join(appdata_path, 'LocalLow')
+        print(f"get: {appdata_path}")
     else:
         appdata_path = os.path.expanduser('~/.config')
     appdata_folder = os.path.join(appdata_path, NAME, APP_NAME)
@@ -16,16 +19,7 @@ def get_appdata_path():
     return appdata_folder
 
 
-def save_path(directory):
-    appdata_folder = get_appdata_path()
-    appdata_file = os.path.join(appdata_folder, 'last_path.txt')
-
-    with open(appdata_file, 'w') as file:
-        file.write(directory)
-    logging.info(f"AppData configuration file SAVED")
-
-
-class ProgramData(metadata=Singleton):
+class ProgramData:
     def __init__(self):
         self.appdata = get_appdata_path()
         self.config = {
@@ -35,21 +29,42 @@ class ProgramData(metadata=Singleton):
             "video_file": VIDEO_FILE,
         }
 
+    def save_appdata(self):
+        config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
+        config_input = ""
+        for key, value in self.config.items():
+            if value is not None and value != "":
+                config_input += f"{key.upper()}={value}\n"
+
+        with open(config_file, 'w') as file:
+            file.write(config_input)
+        logging.info(f"Configuration file SAVED '{config_file}'")
+
     def load_appdata(self):
-        appdata_folder = get_appdata_path()
-        appdata_file = os.path.join(appdata_folder, CONFIGURATION_FILE)
-        if os.path.isfile(appdata_file):
-            with open(appdata_file, 'r') as file:
+        # CONFIGURATION
+        config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
+        if os.path.isfile(config_file):
+            logging.info(f"Configuration file LOADED '{config_file}'")
+            with open(config_file, 'r') as file:
                 lines = file.readlines()
             if len(lines) == 0:
-                logging.info(f"AppData configuration empty")
-            else:
-                logging.info(f"AppData configuration LOADED")
+                logging.info(f"Configuration empty")
             for line in lines:
                 conf = line.strip().split('###')[0]
                 conf = conf.split('=')
-                if not conf[0].strip().lower() in self.config:
+                key = conf[0].strip().lower()
+                value = conf[1].strip()
+                if key not in self.config or len(value) < 1:
                     continue
-                self.config[conf[0].strip().lower()] = ast.literal_eval(conf[1].strip())
+                try:
+                    value = ast.literal_eval(value)
+                except (ValueError, SyntaxError):
+                    pass
+                finally:
+                    self.config[key] = value
+                logging.info(f"CONFIG {key}={value}")
             return
-        logging.info(f"AppData configuration file not found")
+        logging.info(f"Configuration file NOT FOUND")
+
+
+pd = ProgramData()

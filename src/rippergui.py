@@ -6,8 +6,8 @@ import tkinter.filedialog as filediag
 import tkinter.font as tkfont
 import logging
 from functools import partial
+from src.data import pd
 
-from src.data import ProgramData
 from config import *
 
 
@@ -16,6 +16,8 @@ def validate_path(obj):
     logging.debug(f"Validated path '{path}'")
     if os.path.isdir(path):
         obj.config(bg="white")
+        pd.config['download_path'] = path
+        pd.save_appdata()
     else:
         obj.config(bg="yellow")
 
@@ -35,12 +37,12 @@ def shift_focus(obj):
 class RipperGUI(tk.Tk):
 
     def run(self):
-        self.mainloop()
         logging.info("GUI loop started")
+        self.mainloop()
 
     def __init__(self):
         super().__init__()
-        self.download_path = tk.StringVar(self, os.path.expanduser('~'))
+        self.download_strvar = tk.StringVar(self, os.path.expanduser('~'))
 
         self.title_font = tkfont.Font(family="Yu Gothic", size=14, weight="bold")
         self.main_icon = tk.PhotoImage(file='assets\\obli-ripper-icon.png')
@@ -59,7 +61,7 @@ class RipperGUI(tk.Tk):
             highlightcolor="#24212b")
         main_frame.pack(padx=10, pady=20)
 
-        # TITLE
+# TITLE
         title_frame = tk.Frame(
             main_frame,
             width=400,
@@ -70,17 +72,21 @@ class RipperGUI(tk.Tk):
         title_label = tk.Label(title_frame, text="YTDL Media content downloader", fg="#24212b", font=self.title_font, padx=20, pady=10)
         title_label.pack()
 
-        # DOWNLOAD PATH
+# DOWNLOAD PATH
         path_frame = tk.Frame(title_frame)
         path_frame.pack(side=tk.LEFT, padx=10, pady=10)
         path_label = tk.Label(path_frame, text="Download path:")
         path_label.pack(side=tk.LEFT)
-        path_entry = tk.Entry(path_frame, textvariable=self.download_path, width=30)
+
+        if pd.config['download_path'] != "":
+            self.download_strvar.set(pd.config['download_path'])
+        path_entry = tk.Entry(path_frame, textvariable=self.download_strvar, width=30)
         path_entry.pack(side=tk.LEFT)
-        browse_button = tk.Button(path_frame, text="🗀", command=partial(browse_directory, path_entry))
-        browse_button.pack(side=tk.RIGHT)
         path_entry.bind("<Return>", lambda event: shift_focus(self))
         path_entry.bind("<FocusOut>", lambda event: validate_path(path_entry))
+
+        browse_button = tk.Button(path_frame, text="🗀", command=partial(browse_directory, path_entry))
+        browse_button.pack(side=tk.RIGHT)
 
         logging.info("GUI created")
 
