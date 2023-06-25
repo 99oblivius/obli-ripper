@@ -1,9 +1,8 @@
-import os
-from config import *
-import json
 import ast
-import logging
-from src.utils import Singleton
+import os
+
+from config import *
+from src.logs import logging as log
 
 
 def get_appdata_path():
@@ -11,7 +10,6 @@ def get_appdata_path():
         appdata_path = os.getenv('APPDATA')
         appdata_path = os.path.dirname(appdata_path)
         appdata_path = os.path.join(appdata_path, 'LocalLow')
-        print(f"get: {appdata_path}")
     else:
         appdata_path = os.path.expanduser('~/.config')
     appdata_folder = os.path.join(appdata_path, NAME, APP_NAME)
@@ -23,10 +21,12 @@ class ProgramData:
     def __init__(self):
         self.appdata = get_appdata_path()
         self.config = {
-            "download_path": "",
+            "download_path": DOWNLOAD_PATH,
             "debug_level": DEBUG_LEVEL,
-            "audio_file": AUDIO_FILE,
-            "video_file": VIDEO_FILE,
+            "download_container": DOWNLOAD_CONTAINER,
+            "video_containers": VIDEO_CONTAINERS,
+            "audio_containers": AUDIO_CONTAINERS,
+            "songs_file": None,
         }
 
     def save_appdata(self):
@@ -38,17 +38,17 @@ class ProgramData:
 
         with open(config_file, 'w') as file:
             file.write(config_input)
-        logging.info(f"Configuration file SAVED '{config_file}'")
+        log.info(f"Configuration file SAVED '{config_file}'")
 
     def load_appdata(self):
         # CONFIGURATION
         config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
         if os.path.isfile(config_file):
-            logging.info(f"Configuration file LOADED '{config_file}'")
+            log.info(f"Configuration file LOADED '{config_file}'")
             with open(config_file, 'r') as file:
                 lines = file.readlines()
             if len(lines) == 0:
-                logging.info(f"Configuration empty")
+                log.info(f"Configuration empty")
             for line in lines:
                 conf = line.strip().split('###')[0]
                 conf = conf.split('=')
@@ -62,9 +62,9 @@ class ProgramData:
                     pass
                 finally:
                     self.config[key] = value
-                logging.info(f"CONFIG {key}={value}")
+                log.info(f"CONFIG {key}={value}")
             return
-        logging.info(f"Configuration file NOT FOUND")
+        log.info(f"Configuration file NOT FOUND")
 
 
 pd = ProgramData()

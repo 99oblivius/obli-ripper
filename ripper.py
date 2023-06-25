@@ -1,28 +1,18 @@
 from __future__ import unicode_literals
 
-import logging
+import atexit
 import os
-from datetime import datetime
-
-from config import *
-from src.data import pd
-
-logs_folder = os.path.join(pd.appdata, "Logs")
-os.makedirs(logs_folder, exist_ok=True)
-logging_file = os.path.join(logs_folder, f"logs-{NAME}{APP_NAME}{VERSION}-{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.log")
-logging.basicConfig(
-    filename=logging_file,
-    format='%(asctime)s %(levelname)s| %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S.%f'[:-3],
-    level=pd.config['debug_level'],
-)
-logging.info(f"Logging file generated '{logging_file}'")
 
 import yt_dlp
 
 import src.rippergui as ripper
+from src.data import pd
+from src.logs import logging as log
 
-import atexit
+
+def exit_function():
+    pd.save_appdata()
+    log.critical("Program closed")
 
 
 def yt_dl_process():
@@ -55,7 +45,9 @@ def yt_dl_process():
 
 def main():
     pd.load_appdata()
-    atexit.register(pd.save_appdata)
+    log.getLogger().setLevel(pd.config['debug_level'])
+    log.info(f"Logging file generated")
+    atexit.register(exit_function)
     window = ripper.RipperGUI()
     window.run()
 
