@@ -1,17 +1,39 @@
 from __future__ import unicode_literals
 
+import asyncio
+from queue import LifoQueue, Empty
 import re
+import threading
 import tkinter as tk
 import tkinter.filedialog as filediag
 import tkinter.font as tkfont
 from functools import partial
+
+import yt_dlp
 
 from config import *
 from src.data import pd
 from src.logs import logging as log
 
 
-def download_check(urlfile):
+class RipperException:
+    def __init__(self, message="Error"):
+        self.message = message
+        self._error()
+
+    def _error(self):
+        win = tk.Toplevel()
+        win.geometry("150x80")
+        win.minsize(220, 100)
+        win.maxsize(220, 100)
+        win.wm_title("Exception")
+        label = tk.Label(win, text=f"Error: {self.message}", font=tkfont.Font(size=10, weight="bold"))
+        label.pack(side=tk.TOP, pady=15)
+        close = tk.Button(win, text="Close", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
+        close.pack(pady=15, padx=28)
+
+
+def download_check(download_label, urlfile):
     inputs = []
 
     url = urlfile[0].get('1.0', tk.END).strip()
@@ -26,11 +48,12 @@ def download_check(urlfile):
     re_url = re.compile(
         r'^((http|https)://)[-a-zA-Z0-9@:%._\+~#?&//=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%._\+~#?&//=]*)$')
     for link in inputs:
-        if re_url.search(link):
-            urls.append(link)
-            log.info(f"ADDING: {link}")
+        match = re_url.search(link)
+        if match:
+            urls.append(match.group())
+            log.info(f"ADDING: {match.group()}")
         else:
-            log.info(f"IGNORING: {link}")
+            log.debug(f"IGNORING: {link}")
 
     win = tk.Toplevel()
     win.geometry("150x80")
@@ -38,21 +61,97 @@ def download_check(urlfile):
     win.maxsize(220, 100)
     win.wm_title("Download")
     if len(urls) > 0:
-        label = tk.Label(win, text=f"You will download {len(urls)} link{'s' if len(urls) != 1 else ''}", font=tkfont.Font(size=10, weight="normal"))
+        label = tk.Label(win, text=f"You will download {len(urls)} file{'s' if len(urls) != 1 else ''}", font=tkfont.Font(size=10, weight="normal"))
         label.pack(side=tk.TOP, pady=15)
         close = tk.Button(win, text="Close", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
         close.pack(side=tk.RIGHT, pady=15, padx=28)
-        confirm = tk.Button(win, text="Confirm", font=tkfont.Font(size=10, weight="bold"), command=partial(download, urls))
+        confirm = tk.Button(win, text="Confirm", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
         confirm.pack(side=tk.LEFT, pady=15, padx=28)
+        confirm.bind("<ButtonRelease>", ytdlp_download(download_label, urls))
     else:
+        log.warning("No links found")
         label = tk.Label(win, text=f"No links found", font=tkfont.Font(size=10, weight="normal"))
         label.pack(side=tk.TOP, pady=15)
         close = tk.Button(win, text="Close", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
         close.pack(pady=15, padx=28)
 
 
-def download(urls):
+def ytdlp_download(label, urls):
     log.info(f"DOWNLOADING: {urls}")
+    download_options = -1
+
+    container = pd.config['download_container']
+    if container in VIDEO_CONTAINERS:
+        download_options = {
+            "format": f"{container}/bv*+ba/b",
+            "format-sort": 'ext'
+        }
+    elif container in AUDIO_CONTAINERS:
+        download_options = {
+            "format": f"{container}/bestaudio/best",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": f"{container}"
+                }
+            ]
+        }
+    if download_options == -1:
+        RipperException()
+        return
+
+    loop = asyncio.get_event_loop()
+    queue = LifoQueue()
+    coros = [download_function(url, queue, download_options, label) for url in urls]
+    futures = asyncio.gather(*coros)
+
+    download = threading.Thread(target=thread_download, args=[loop, futures])
+    download.start()
+    print("starting")
+    while not futures.done():
+        try:
+            data = queue.get_nowait()
+            label.set(queue.get())
+            log.debug(f"Futures {data}")
+            print("queue")
+        except Empty as e:
+            print("no stat")
+        finally:
+            asyncio.run(asyncio.sleep(0.1))
+        print("label")
+        event = queue.get()
+        percentage = event["_percent_str"]
+        speed = event["_speed_str"]
+        completed = sum(future.done() for future in futures)
+        label.set(f"{speed} Download {percentage} [{completed}/{len(coros)}]")
+    label.set("Download")
+
+
+def progress_hook(queue: LifoQueue, label: tk.StringVar, event):
+    queue.put(event)
+    percentage = f"{queue.qsize()}"
+    log.info(f"Downloading {percentage}")
+    if event['status'] == 'finished':
+        label.set("Download")
+        log.info(f"Done downloading '{event}'")
+
+
+def thread_download(loop, future):
+    loop.run_until_complete([future])
+
+
+def download_function(url, queue, options, label):
+    partial_hook = partial(progress_hook, queue, label)
+    options.update(
+        {
+            "progress_hooks": [partial_hook],
+            "ignoreerrors": True,
+            "ffmpeg-location": "C:/Users/oblivius/AppData/LocalLow/Oblivius/Ripper/bin/ffmpeg.exe"
+        }
+    )
+    os.chdir(pd.config['download_path'])
+    with yt_dlp.YoutubeDL(options) as ydl:
+        return ydl.download(url)
 
 
 def validate_path(obj):
@@ -67,8 +166,8 @@ def validate_path(obj):
         log.debug(f"Failed path '{path}'")
 
 
-def browse_directory(obj):
-    directory = filediag.askdirectory()
+def browse_directory(obj, initialdir=None):
+    directory = filediag.askdirectory(initialdir=initialdir)
     if directory:
         obj.delete(0, tk.END)
         obj.insert(tk.END, directory)
@@ -82,8 +181,10 @@ def browse_file(obj, var):
                 ('', '*.txt'),
                 ('', '*.csv'),
                 ('', '*.tsv'),
+                ('', '*.json'),
                 ('', '*.xml'),
                 ('', '*.xls'),
+                ('', '*.xlxs'),
                 ('', '*.cfg'),
                 ('', '*.pls'),
                 ('', '*.cure'),
@@ -95,9 +196,11 @@ def browse_file(obj, var):
     except FileNotFoundError:
         return
     if file:
-        obj.set(f".../{os.path.basename(os.path.abspath(file.name))}")
-        pd.config['songs_file'] = os.path.abspath(file.name)
-        var.set(os.path.abspath(file.name))
+        path = os.path.abspath(file.name)
+        log.debug(f"Song file selected '{os.path.basename(path)}'")
+        obj.set(f".../{os.path.basename(path)}")
+        pd.config['songs_file'] = path
+        var.set(path)
 
 
 def shift_focus(obj):
@@ -115,22 +218,26 @@ def update_url_paragraph_height(frame, url_paragraph, *args):
 def open_localfiles():
     try:
         os.startfile(pd.appdata)
+        log.info("Opened Local folder")
     except Exception:
+        log.critical("Couldn't open Local folder")
         win = tk.Toplevel()
         win.geometry("150x80")
         win.minsize(180, 100)
         win.maxsize(180, 100)
         win.wm_title("Alert")
-        l = tk.Label(win, text="AppData directory not found... This should never happen")
-        l.pack(side=tk.TOP, pady=15)
-        b = tk.Button(win, text="Close", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
-        b.pack(side=tk.BOTTOM, pady=15, ipadx=6, ipady=4)
+        label = tk.Label(win, text="AppData directory not found... This should never happen")
+        label.pack(side=tk.TOP, pady=15)
+        close = tk.Button(win, text="Close", font=tkfont.Font(size=10, weight="bold"), command=win.destroy)
+        close.pack(side=tk.BOTTOM, pady=15, ipadx=6, ipady=4)
 
 
 def open_downloads():
     try:
         os.startfile(pd.config['download_path'])
+        log.info("Opened Downloads folder")
     except Exception:
+        log.warning("Couldn't open Downloads folder")
         win = tk.Toplevel()
         win.geometry("150x80")
         win.minsize(180, 100)
@@ -170,7 +277,7 @@ class RipperGUI(tk.Tk):
         self.select_reset()
 
     class FileLabelPlaceholder(tk.Frame):
-        def __init__(self, parent=None, placeholder="None", textvariable=tk.StringVar, *args, **kwargs):
+        def __init__(self, parent=None, placeholder="None", textvariable: tk.StringVar=None, *args, **kwargs):
             super().__init__(parent, *args, **kwargs)
             self.label = tk.Label(self, text=placeholder)
             self.label.pack(side=tk.LEFT)
@@ -272,7 +379,7 @@ class RipperGUI(tk.Tk):
         path_entry.bind("<Return>", lambda event: shift_focus(self))
         path_entry.bind("<FocusOut>", lambda event: validate_path(path_entry))
 
-        browse_button = tk.Button(path_frame, text="🗀", cursor="hand2", command=partial(browse_directory, path_entry))
+        browse_button = tk.Button(path_frame, text="🗀", cursor="hand2", command=partial(browse_directory, path_entry, pd.config['download_path']))
         browse_button.pack(side=tk.RIGHT)
 
 # CONTENT FRAME
@@ -327,14 +434,14 @@ class RipperGUI(tk.Tk):
 
         downloads_button = tk.Button(content_frame4, text="📂", width=5, height=2, font=tkfont.Font(size=11), command=open_downloads)
         downloads_button.pack(side=tk.LEFT)
-
+        download_label = tk.StringVar(self, "Download")
         download_button = tk.Button(content_frame4,
-            text="Download",
-            command=partial(download_check, (url_paragraph, songs_file)),
-            font=tkfont.Font(size=18),
+            textvariable=download_label,
+            command=partial(download_check, download_label, (url_paragraph, songs_file)),
+            font=tkfont.Font(size=11),
             cursor="hand2",
-            width=14,
-            height=1)
+            width=22,
+            height=2)
         download_button.pack(side=tk.LEFT, pady=10)
 
         logs_button = tk.Button(content_frame4, text="📰", width=5, height=2, font=tkfont.Font(size=11), command=open_logs)

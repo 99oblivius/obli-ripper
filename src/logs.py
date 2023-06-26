@@ -1,6 +1,5 @@
 import glob
 import logging
-import os
 from datetime import datetime
 
 from config import *
@@ -20,6 +19,7 @@ def delete_oldest_files(directory, limit):
     for file in sorted_files[limit:]:
         file_path = file[0]
         os.remove(file_path)
+
 
 def validate_file_format(file):
     file_name = os.path.basename(file)

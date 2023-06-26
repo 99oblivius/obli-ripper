@@ -1,5 +1,4 @@
 import ast
-import os
 
 from config import *
 from src.logs import logging as log
