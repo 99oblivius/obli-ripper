@@ -20,7 +20,7 @@ class ProgramData:
         config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
         config_input = ""
         for key, value in self.config.items():
-            if value is not None and value != "":
+            if value is not None:
                 config_input += f"{key.upper()}={value}\n"
 
         with open(config_file, 'w') as file:

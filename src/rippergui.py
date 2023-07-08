@@ -1,7 +1,9 @@
 from __future__ import unicode_literals
 
 import re
+import sys
 import threading
+import webbrowser
 from functools import partial
 
 import yt_dlp
@@ -44,12 +46,14 @@ class RipperGUI(tk.Tk):
             self.label.pack(side=tk.LEFT)
             self.placeholder = placeholder
             self.textvariable = textvariable
-            self.set(placeholder)
             self.hyperlink = tk.Label(self,
                 text="✖️",
                 fg="red",
                 cursor="hand2")
             self.hyperlink.bind("<Button-1>", self.reset)
+
+            if textvariable.get() == "": self.set(placeholder)
+            else: self.set(textvariable.get())
 
         def set(self, text):
             if text == self.placeholder:
@@ -65,6 +69,7 @@ class RipperGUI(tk.Tk):
         def remove_reset(self):
             self.hyperlink.forget()
             self.textvariable.set("")
+            pd.config['songs_file'] = ""
 
         def reset(self, event):
             log.debug("Song file removed")
@@ -111,14 +116,17 @@ class RipperGUI(tk.Tk):
             self.minsize(500, 170)
             self.title = "Console"
 
+            self.console_title = tk.Label(self, text="Console Output", font=tkfont.Font(size=20))
+            self.console_title.pack(side=tk.TOP, pady=5)
+
             self.console_frame = tk.Frame(self, bg="black")
             self.console_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
             self.console_text = tk.Text(self.console_frame, wrap=tk.NONE, bg="black", fg="white", font='TkFixedFont')
             self.console_text.pack(fill=tk.BOTH, expand=True)
 
-            # sys.stdout = self.ConsoleRedirector(self.console_text, sys.stdout)
-            # sys.stderr = self.ConsoleRedirector(self.console_text, sys.stderr)
+            sys.stdout = self.ConsoleRedirector(self.console_text, sys.stdout)
+            sys.stderr = self.ConsoleRedirector(self.console_text, sys.stderr)
 
         def open_window(self):
             self.deiconify()
@@ -194,36 +202,42 @@ class RipperGUI(tk.Tk):
         self.download_thread.start()
 
     def download_function(self):
-        container = self.download_container
+        container = self.download_container.get()
         download_options = {
-            "ignoreerrors": True,
+            "ignoreerrors": False,
             "live_from_start": True,
             "logger": MyLogger(),
-            "ffmpeg_location": os.path.join(get_appdata_path(), f"{NAME}/{APP_NAME}/bin/"),
+            "ffmpeg_location": os.path.join(get_appdata_path(), "bin"),
             "progress_hooks": [self.progress_hook],
             "postprocessor_hooks": [self.postprocessor_hook]
         }
         if container in VIDEO_CONTAINERS:
-            download_options.update({"format": f"{container}/bv*+ba/b", "format-sort": 'ext'})
+            download_options.update({"format": f"bv[ext={container}]+ba/bv*+ba/b",
+                "format-sort": 'ext',
+                "postprocessors": [
+                    {"key": "FFmpegVideoConvertor", "preferedformat": f"{container}"}
+                ]})
         elif container in AUDIO_CONTAINERS:
-            download_options.update({"format": f"{container}/bestaudio/best",
-                "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": f"{container}"}]})
+            download_options.update({"format": f"ba[ext={container}/ba*/b",
+                "postprocessors": [
+                    {"key": "FFmpegExtractAudio", "preferredcodec": f"{container}"}
+                ]})
 
         links = '\n'.join(self.urls)
         log.info(f"Downloading {container}:\n{links}")
         os.chdir(pd.config['download_path'])
-        self.downloads_button.config(state=tk.DISABLED)
+        self.download_button.config(state=tk.DISABLED, cursor="heart")
         self.ytdl = yt_dlp.YoutubeDL(download_options)
         self.ytdl.download(self.urls)
-        # self.downloads_button.config(state=tk.ACTIVE)
+        self.download_button.config(state=tk.ACTIVE, cursor="hand2")
         self.download_thread = None
+        self.download_label.set("Download")
 
     def progress_hook(self, event):
         if event['status'] == 'finished':
-            self.download_label.set("Download")
             return
         now = stamp_now()
-        if now > self.progress_stamp+0.333:
+        if now > self.progress_stamp+0.5:
             if event['status'] == 'downloading':
                 self.progress_stamp = now
                 speed = event["_speed_str"]
@@ -234,12 +248,11 @@ class RipperGUI(tk.Tk):
 
     def postprocessor_hook(self, event):
         if event['status'] == 'finished':
-            self.download_label.set("Download")
             return
         now = stamp_now()
         if event['status'] == 'started':
-            self.download_label.set("Started")
-        elif now > self.progress_stamp + 0.333 and event['status'] == 'processing':
+            self.download_label.set(f"Processing [{self.ytdl.count_progress}/{self.ytdl.total_count}]")
+        elif now > self.progress_stamp + 0.5 and event['status'] == 'processing':
             self.progress_stamp = now
             self.download_label.set(f"Processing Download")
 
@@ -308,8 +321,11 @@ class RipperGUI(tk.Tk):
             highlightthickness=1)
         title_frame.config()
         title_frame.pack(padx=10, pady=20)
-        title_label = tk.Label(title_frame, text="YTDL Media content downloader", fg="#24212b", font=self.title_font, padx=20, pady=10)
+        title_label = tk.Label(title_frame, text="Media content downloader", fg="#24212b", font=self.title_font, padx=20)
         title_label.pack()
+        supported_label = tk.Label(title_frame, text="Supported sites", fg="blue", cursor="hand2",font=("", 8, "underline"))
+        supported_label.pack()
+        supported_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"))
 
 # DOWNLOAD PATH
         path_frame = tk.Frame(title_frame)
@@ -364,6 +380,7 @@ class RipperGUI(tk.Tk):
         container_label.pack(side=tk.LEFT)
         containers_frame = tk.Frame(content_frame3)
         containers_frame.pack(side=tk.LEFT, pady=10)
+
         containers_label = tk.Label(containers_frame, textvariable=self.download_container, font=tkfont.Font(size=10, weight="normal"))
         containers_label.pack(side=tk.RIGHT, padx=8)
 
