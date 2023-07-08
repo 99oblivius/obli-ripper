@@ -29,13 +29,7 @@ def validate_file_format(file):
         return False
 
 
-if os.name == 'nt':
-    appdata_path = os.getenv('APPDATA')
-    appdata_path = os.path.dirname(appdata_path)
-    appdata_path = os.path.join(appdata_path, 'LocalLow')
-else:
-    appdata_path = os.path.expanduser('~/.config')
-logs_folder = os.path.join(appdata_path, NAME, APP_NAME, "Logs")
+logs_folder = os.path.join(get_appdata_path(), NAME, APP_NAME, "Logs")
 os.makedirs(logs_folder, exist_ok=True)
 logging_file = os.path.join(logs_folder, f"logs-{NAME}{APP_NAME}{VERSION}-{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.log")
 logging.basicConfig(
@@ -43,5 +37,23 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s| %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
+
+
+class MyLogger:
+    def debug(self, msg):
+        if msg.startswith('[debug] '):
+            logging.debug(f"YT-DLP {msg[8:]}")
+        elif msg.startswith('[info] '):
+            logging.info(f"YT-DLP {msg[7:]}")
+
+    def info(self, msg):
+        pass
+
+    def warning(self, msg):
+        logging.warning(f"YT-DLP {msg[10:]}")
+
+    def error(self, msg):
+        logging.error(f"YT-DLP {msg[8:]}")
+
 
 delete_oldest_files(logs_folder, LOG_COUNT)

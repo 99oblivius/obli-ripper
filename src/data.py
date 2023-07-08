@@ -4,18 +4,6 @@ from config import *
 from src.logs import logging as log
 
 
-def get_appdata_path():
-    if os.name == 'nt':
-        appdata_path = os.getenv('APPDATA')
-        appdata_path = os.path.dirname(appdata_path)
-        appdata_path = os.path.join(appdata_path, 'LocalLow')
-    else:
-        appdata_path = os.path.expanduser('~/.config')
-    appdata_folder = os.path.join(appdata_path, NAME, APP_NAME)
-    os.makedirs(appdata_folder, exist_ok=True)
-    return appdata_folder
-
-
 class ProgramData:
     def __init__(self):
         self.appdata = get_appdata_path()
@@ -25,7 +13,7 @@ class ProgramData:
             "download_container": DOWNLOAD_CONTAINER,
             "video_containers": VIDEO_CONTAINERS,
             "audio_containers": AUDIO_CONTAINERS,
-            "songs_file": None,
+            "songs_file": SONGS_FILE,
         }
 
     def save_appdata(self):

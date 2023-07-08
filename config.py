@@ -16,3 +16,16 @@ DEBUG_LEVEL = 10  # 10:DEBUG 20:INFO 30:WARN 40:ERROR 50:CRITICAL
 DOWNLOAD_CONTAINER = "mp4"
 VIDEO_CONTAINERS = "av1", "flv", "mkv", "m4v", "mov", "mp4", "webm"
 AUDIO_CONTAINERS = "aac", "flac", "m4a", "mp3", "ogg", "wav", "webm"
+SONGS_FILE = os.path.expanduser('~')
+
+
+def get_appdata_path():
+    if os.name == 'nt':
+        appdata_path = os.getenv('APPDATA')
+        appdata_path = os.path.dirname(appdata_path)
+        appdata_path = os.path.join(appdata_path, 'LocalLow')
+    else:
+        appdata_path = os.path.expanduser('~/.config')
+    appdata_folder = os.path.join(appdata_path, NAME, APP_NAME)
+    os.makedirs(appdata_folder, exist_ok=True)
+    return appdata_folder
