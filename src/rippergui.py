@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import logging
 import re
 import sys
 import threading
@@ -8,10 +9,12 @@ from functools import partial
 
 import yt_dlp
 
-from src.utils import *
 from src.data import pd
-from src.logs import logging as log
+from src.dependencies import rquirements_setup
 from src.logs import MyLogger
+from src.utils import *
+
+logger = logging.getLogger()
 
 
 class RipperException:
@@ -33,8 +36,8 @@ class RipperException:
 
 class RipperGUI(tk.Tk):
     class FunctionalButton(tk.Button):
-        def __init__(self, parent=None, action=None, *args, **kwargs):
-            super().__init__(parent, *args, cursor="hand2", **kwargs)
+        def __init__(self, parent=None, action=None, cursor="hand2", *args, **kwargs):
+            super().__init__(parent, *args, cursor=cursor, **kwargs)
             self.bind("<ButtonRelease>", action)
             self.bind("<KeyRelease-space>", action)
             self.bind("<KeyRelease-Return>", action)
@@ -60,7 +63,7 @@ class RipperGUI(tk.Tk):
                 self.label.config(text=text, fg="grey")
             else:
                 self.label.config(text=text, fg="black")
-                log.debug(f"Song file added '{text}'")
+                logger.debug(f"Song file added '{text}'")
                 self.add_reset()
 
         def add_reset(self):
@@ -72,7 +75,7 @@ class RipperGUI(tk.Tk):
             pd.config['songs_file'] = ""
 
         def reset(self, event):
-            log.debug("Song file removed")
+            logger.debug("Song file removed")
             self.set(self.placeholder)
             self.remove_reset()
 
@@ -92,7 +95,7 @@ class RipperGUI(tk.Tk):
 
         def unfocus_show(self, *args):
             if self.get("1.0", "end-1c") == "":
-                log.debug(f"'{self.placeholder}' TextPlaceholder displayed")
+                logger.debug(f"'{self.placeholder}' TextPlaceholder displayed")
                 self.insert("1.0", self.placeholder)
                 self.config(foreground=self.placeholder_color)
 
@@ -158,9 +161,9 @@ class RipperGUI(tk.Tk):
             match = re_url.search(link)
             if match:
                 self.urls.append(match.group())
-                log.info(f"ADDING: {match.group()}")
+                logger.info(f"ADDING: {match.group()}")
             else:
-                log.debug(f"IGNORING: {link}")
+                logger.debug(f"IGNORING: {link}")
 
         win = tk.Toplevel()
         win.geometry("150x80")
@@ -190,7 +193,7 @@ class RipperGUI(tk.Tk):
             confirm_button.focus_set()
             close_button.pack(side=tk.RIGHT, pady=15, padx=28)
         else:
-            log.debug("No links found")
+            logger.debug("No links found")
             empty_label = tk.Label(win, text=f"No links found", font=tkfont.Font(size=10, weight="normal"))
             empty_label.pack(side=tk.TOP, pady=15)
             empty_label.focus_set()
@@ -198,7 +201,7 @@ class RipperGUI(tk.Tk):
 
     def threaded_download(self):
         self.download_thread = threading.Thread(target=self.download_function)
-        log.debug("Download thread starting")
+        logger.debug("Download thread starting")
         self.download_thread.start()
 
     def download_function(self):
@@ -207,24 +210,26 @@ class RipperGUI(tk.Tk):
             "ignoreerrors": False,
             "live_from_start": True,
             "logger": MyLogger(),
-            "ffmpeg_location": os.path.join(get_appdata_path(), "bin"),
+            "ffmpeg_location": os.path.join(get_programfiles_path(), "bin"),
             "progress_hooks": [self.progress_hook],
-            "postprocessor_hooks": [self.postprocessor_hook]
+            "postprocessor_hooks": [self.postprocessor_hook],
+            "format-sort": 'ext',
+            "outtmpl": pd.config['output_template']
         }
         if container in VIDEO_CONTAINERS:
-            download_options.update({"format": f"bv[ext={container}]+ba/bv*+ba/b",
-                "format-sort": 'ext',
+            download_options.update({"format": f"bv*[ext={container}]+ba/b*[ext={container}]/bv*",
                 "postprocessors": [
-                    {"key": "FFmpegVideoConvertor", "preferedformat": f"{container}"}
+                    {"key": "FFmpegVideoRemuxer", "preferedformat": container}
                 ]})
         elif container in AUDIO_CONTAINERS:
-            download_options.update({"format": f"ba[ext={container}/ba*/b",
+            download_options.update({"format": f"ba[ext=opus]/ba/b",
+                "extract-audio": True,
                 "postprocessors": [
-                    {"key": "FFmpegExtractAudio", "preferredcodec": f"{container}"}
+                    {"key": "FFmpegExtractAudio", "preferredcodec": container}
                 ]})
 
         links = '\n'.join(self.urls)
-        log.info(f"Downloading {container}:\n{links}")
+        logger.info(f"Downloading {container}:\n{links}")
         os.chdir(pd.config['download_path'])
         self.download_button.config(state=tk.DISABLED, cursor="heart")
         self.ytdl = yt_dlp.YoutubeDL(download_options)
@@ -242,6 +247,7 @@ class RipperGUI(tk.Tk):
                 self.progress_stamp = now
                 speed = event["_speed_str"]
                 percentage = event["_percent_str"]
+                if speed.strip().startswith("Unknown"): return
                 self.download_label.set(f"{speed} {percentage} [{self.ytdl.count_progress}/{self.ytdl.total_count}]")
             else:
                 self.download_label.set("Waiting")
@@ -257,7 +263,7 @@ class RipperGUI(tk.Tk):
             self.download_label.set(f"Processing Download")
 
     def select_reset(self):
-        log.info(f"Container selected {self.video_container.get()}")
+        logger.info(f"Container selected {self.video_container.get()}")
         self.video_container.set("🎬")
         self.audio_container.set("🎵")
 
@@ -278,7 +284,7 @@ class RipperGUI(tk.Tk):
         self.select_reset()
 
     def run(self):
-        log.info("GUI loop started")
+        logger.info("GUI loop started")
         self.mainloop()
 
     def __init__(self, *args, **kwargs):
@@ -290,7 +296,7 @@ class RipperGUI(tk.Tk):
         self.songs_file = tk.StringVar(self, pd.config['songs_file'])
 
         self.title_font = tkfont.Font(family="Yu Gothic", size=14, weight="bold")
-        self.main_icon = tk.PhotoImage(file='assets\\obli-ripper-icon.png')
+        self.main_icon = tk.PhotoImage(file=APP_ICON)
 
         self.geometry(f"{RESOLUTION_X}x{RESOLUTION_Y}")
         self.minsize(RESOLUTION_X, 414)
@@ -396,15 +402,21 @@ class RipperGUI(tk.Tk):
         self.downloads_button = self.FunctionalButton(content_frame4, text="📂", width=5, height=2, font=tkfont.Font(size=11), command=open_downloads)
         self.downloads_button.pack(side=tk.LEFT)
         self.download_label = tk.StringVar(self, "Download")
+        requirements = rquirements_setup()
+        state = tk.ACTIVE if requirements else tk.DISABLED
+        cursor = "hand2" if requirements else "question_arrow"
+        text = self.download_label if requirements else tk.StringVar(self, "Dependencies missing")
         self.download_button = self.FunctionalButton(content_frame4,
-            textvariable=self.download_label,
+            textvariable=text,
             command=partial(self.download_check),
             font=tkfont.Font(size=11),
             width=22,
-            height=2)
+            height=2,
+            cursor=cursor,
+            state=state)
         self.download_button.pack(side=tk.LEFT, pady=10)
 
         logs_button = self.FunctionalButton(content_frame4, text="📰", width=5, height=2, font=tkfont.Font(size=11), command=self.logs_toggle)
         logs_button.pack(side=tk.LEFT)
 
-        log.info("GUI created")
+        logger.info("GUI created")

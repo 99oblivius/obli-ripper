@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import logging
 import tkinter as tk
 import tkinter.filedialog as filediag
 import tkinter.font as tkfont
@@ -7,7 +8,8 @@ from datetime import datetime
 
 from config import *
 from src.data import pd
-from src.logs import logging as log
+
+logger = logging.getLogger(__name__)
 
 
 def stamp_now():
@@ -20,10 +22,10 @@ def validate_path(obj):
         obj.config(bg="white")
         pd.config['download_path'] = path
         pd.save_appdata()
-        log.debug(f"Validated path '{path}'")
+        logger.debug(f"Validated path '{path}'")
     else:
         obj.config(bg="yellow")
-        log.debug(f"Failed path '{path}'")
+        logger.debug(f"Failed path '{path}'")
 
 
 def browse_directory(obj, initialdir=None):
@@ -32,6 +34,7 @@ def browse_directory(obj, initialdir=None):
         obj.delete(0, tk.END)
         obj.insert(tk.END, directory)
         validate_path(obj)
+        logger.debug(f"Validated directory '{directory}'")
 
 
 def browse_file(obj, var):
@@ -57,7 +60,7 @@ def browse_file(obj, var):
         return
     if file:
         path = os.path.abspath(file.name)
-        log.debug(f"Song file selected '{os.path.basename(path)}'")
+        logger.debug(f"Song file selected '{os.path.basename(path)}'")
         obj.set(f".../{os.path.basename(path)}")
         pd.config['songs_file'] = path
         var.set(path)
@@ -78,9 +81,9 @@ def update_url_paragraph_dimensions(frame, url_paragraph, *args):
 def open_localfiles():
     try:
         os.startfile(pd.appdata)
-        log.info("Opened Local folder")
+        logger.info("Opened Local folder")
     except Exception:
-        log.critical("Couldn't open Local folder")
+        logger.critical("Couldn't open Local folder")
         win = tk.Toplevel()
         win.geometry("150x80")
         win.minsize(180, 100)
@@ -95,9 +98,9 @@ def open_localfiles():
 def open_downloads():
     try:
         os.startfile(pd.config['download_path'])
-        log.info("Opened Downloads folder")
+        logger.info("Opened Downloads folder")
     except Exception:
-        log.warning("Couldn't open Downloads folder")
+        logger.warning("Couldn't open Downloads folder")
         win = tk.Toplevel()
         win.geometry("150x80")
         win.minsize(180, 100)

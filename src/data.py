@@ -1,7 +1,9 @@
 import ast
+import logging
 
 from config import *
-from src.logs import logging as log
+
+logger = logging.getLogger()
 
 
 class ProgramData:
@@ -14,28 +16,34 @@ class ProgramData:
             "video_containers": VIDEO_CONTAINERS,
             "audio_containers": AUDIO_CONTAINERS,
             "songs_file": SONGS_FILE,
+            "output_template": OUTPUT_TEMPLATE
         }
 
     def save_appdata(self):
         config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
         config_input = ""
         for key, value in self.config.items():
-            if value is not None:
-                config_input += f"{key.upper()}={value}\n"
+            if value is None:
+                continue
+            if key == "debug_level":
+                value = f"{value} ### 10debug 20info 30waring 40error 50critical"
+            elif key == "output_template":
+                value = f"{value} ### https://github.com/yt-dlp/yt-dlp#output-template"
+            config_input += f"{key.upper()}={value}\n"
 
         with open(config_file, 'w') as file:
             file.write(config_input)
-        log.info(f"Configuration file SAVED '{config_file}'")
+        logger.info(f"Configuration file SAVED '{config_file}'")
 
     def load_appdata(self):
         # CONFIGURATION
         config_file = os.path.join(self.appdata, CONFIGURATION_FILE)
         if os.path.isfile(config_file):
-            log.info(f"Configuration file LOADED '{config_file}'")
+            logger.info(f"Configuration file LOADED '{config_file}'")
             with open(config_file, 'r') as file:
                 lines = file.readlines()
             if len(lines) == 0:
-                log.info(f"Configuration empty")
+                logger.info(f"Configuration empty")
             for line in lines:
                 conf = line.strip().split('###')[0]
                 conf = conf.split('=')
@@ -49,9 +57,9 @@ class ProgramData:
                     pass
                 finally:
                     self.config[key] = value
-                log.info(f"CONFIG {key}={value}")
+                logger.info(f"CONFIG {key}={value}")
             return
-        log.info(f"Configuration file NOT FOUND")
+        logger.info(f"Configuration file NOT FOUND")
 
 
 pd = ProgramData()
