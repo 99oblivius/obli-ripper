@@ -3,9 +3,9 @@ from __future__ import unicode_literals
 import atexit
 import logging
 
-import src.logs
-import src.rippergui as ripper
-from src.data import pd
+import src.io.logs
+import src.gui.rippergui as ripper
+from src.io.data import pd
 
 logger = logging.getLogger()
 
@@ -25,5 +25,5 @@ def main():
 
 
 if __name__ == "__main__":
-    src.logs.setup()
+    src.io.logs.setup()
     main()

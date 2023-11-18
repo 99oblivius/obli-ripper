@@ -1,20 +1,42 @@
 from __future__ import unicode_literals
 
-import logging
 import re
 import sys
 import threading
 import webbrowser
 from functools import partial
 
+import tkinter as tk
+import tkinter.font as tkfont
 import yt_dlp
 
-from src.data import pd
-from src.dependencies import rquirements_setup
-from src.logs import MyLogger
-from src.utils import *
+from src.utils.utils import *
+from src.config import (
+    APP_NAME,
+    VERSION,
+    VIDEO_CONTAINERS,
+    AUDIO_CONTAINERS,
+    APP_ICON,
+)
+from src.io.data import (
+    pd,
+    get_programfiles_path,
+    validate_path,
+    browse_directory,
+    browse_file,
+    open_downloads,
+    open_localfiles,
+)
 
 logger = logging.getLogger()
+
+
+def update_url_paragraph_dimensions(frame, url_paragraph, *args):
+    main_frame_width = frame.winfo_width()
+    main_frame_height = frame.winfo_height()
+    url_paragraph_width = int((main_frame_width-RESOLUTION_X)/6 + 45)
+    url_paragraph_height = int((main_frame_height-RESOLUTION_Y)/14 + 7)
+    url_paragraph.config(width=url_paragraph_width, height=url_paragraph_height)
 
 
 class RipperException:
@@ -209,7 +231,6 @@ class RipperGUI(tk.Tk):
         download_options = {
             "ignoreerrors": False,
             "live_from_start": True,
-            "logger": MyLogger(),
             "ffmpeg_location": os.path.join(get_programfiles_path(), "bin"),
             "progress_hooks": [self.progress_hook],
             "postprocessor_hooks": [self.postprocessor_hook],
@@ -248,7 +269,7 @@ class RipperGUI(tk.Tk):
                 speed = event["_speed_str"]
                 percentage = event["_percent_str"]
                 if speed.strip().startswith("Unknown"): return
-                self.download_label.set(f"{speed} {percentage} [{self.ytdl.count_progress}/{self.ytdl.total_count}]")
+                self.download_label.set(f"{speed} {percentage} [{self.ytdl._num_downloads}/{max(len(self.urls), self.ytdl._num_downloads)}]")
             else:
                 self.download_label.set("Waiting")
 
@@ -257,7 +278,7 @@ class RipperGUI(tk.Tk):
             return
         now = stamp_now()
         if event['status'] == 'started':
-            self.download_label.set(f"Processing [{self.ytdl.count_progress}/{self.ytdl.total_count}]")
+            self.download_label.set(f"Processing [{self.ytdl._num_downloads}/{max(len(self.urls), self.ytdl._num_downloads)}]")
         elif now > self.progress_stamp + 0.5 and event['status'] == 'processing':
             self.progress_stamp = now
             self.download_label.set(f"Processing Download")
@@ -314,7 +335,7 @@ class RipperGUI(tk.Tk):
 
         self.urls = []
         self.download_thread = None
-        self.ytdl = None
+        self.ytdl: yt_dlp.YoutubeDL = None
 
         main_frame = tk.Frame(self, width=400)
         main_frame.pack(padx=10, pady=20)
@@ -402,7 +423,8 @@ class RipperGUI(tk.Tk):
         self.downloads_button = self.FunctionalButton(content_frame4, text="📂", width=5, height=2, font=tkfont.Font(size=11), command=open_downloads)
         self.downloads_button.pack(side=tk.LEFT)
         self.download_label = tk.StringVar(self, "Download")
-        requirements = rquirements_setup()
+
+        requirements = requirements_setup()
         state = tk.ACTIVE if requirements else tk.DISABLED
         cursor = "hand2" if requirements else "question_arrow"
         text = self.download_label if requirements else tk.StringVar(self, "Dependencies missing")

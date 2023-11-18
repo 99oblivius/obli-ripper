@@ -1,4 +1,25 @@
-from config import *
+from __future__ import unicode_literals
+
+import os
+import logging
+from datetime import datetime
+
+from src.config import (
+    NAME,
+    APP_NAME,
+    RESOLUTION_Y,
+    RESOLUTION_X,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def stamp_now():
+    return datetime.utcnow().timestamp()
+
+
+def shift_focus(obj):
+    obj.focus()
 
 
 def check_ffmpeg(path):
@@ -12,7 +33,7 @@ def check_ffmpeg(path):
     return os.path.exists(binary_path)
 
 
-def rquirements_setup():
+def requirements_setup():
     if os.name == 'nt':
         program_files_path = os.environ.get('ProgramFiles')
     else:
@@ -21,3 +42,9 @@ def rquirements_setup():
     os.makedirs(bin_folder, exist_ok=True)
 
     return check_ffmpeg(bin_folder)
+
+
+
+
+
+

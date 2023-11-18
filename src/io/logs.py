@@ -1,28 +1,18 @@
 import glob
 import logging
+import os
 from datetime import datetime
 
-from config import *
-from src.data import pd
+from src.io.data import get_appdata_path
+from src.config import (
+    NAME,
+    APP_NAME,
+    VERSION,
+    LOG_COUNT,
+)
+from src.io.data import pd
 
 logger = logging.getLogger()
-
-
-class MyLogger:
-    def debug(self, msg):
-        if msg.startswith('[debug] '):
-            logging.debug(f"YT-DLP {msg[8:]}")
-        elif msg.startswith('[info] '):
-            logging.info(f"YT-DLP {msg[7:]}")
-
-    def info(self, msg):
-        pass
-
-    def warning(self, msg):
-        logging.warning(f"YT-DLP {msg[10:]}")
-
-    def error(self, msg):
-        logging.error(f"YT-DLP {msg[8:]}")
 
 
 def delete_oldest_files(directory, limit):
