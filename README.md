@@ -2,10 +2,11 @@
 
 A versatile desktop application for downloading media content from various platforms, built with Python and Tkinter. Supports both video and audio downloads with customizable output formats.
 
-![Ripper Logo](assets/256.png)
+![Ripper Logo](assets/obli-ripper-icon.png)
 
 ## Features
 
+![Ripper Window](assets/window-example.png)
 - **Multi-Format Support (editable in config as long as ffmpeg supports it)**
   - Video formats: avi, mkv, m4v, mov, mp4, webm
   - Audio formats: aac, flac, mp3, ogg, wav, opus
